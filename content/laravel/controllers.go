@@ -9,87 +9,175 @@ var ControllersSection = data.Section{
 		{
 			ID:    "controller-basic",
 			Title: "Controller Básico",
-			Description: "Agrupa handlers HTTP relacionados numa classe PHP. " +
-				"Criado via `php artisan make:controller NomeController`.",
-			Code: `<?php
-// app/Http/Controllers/MovieController.php
+			Description: "Agrupa a lógica de tratamento de requisições em uma classe.\n" +
+				"Criado em app/Http/Controllers. Gerado via Artisan.",
+			Code: `// Terminal
+php artisan make:controller UserController
+
+// app/Http/Controllers/UserController.php
+<?php
+
 namespace App\Http\Controllers;
 
-use App\Models\Movie;
-use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
-class MovieController extends Controller
+class UserController extends Controller
 {
-    public function index(): View
+    /**
+     * Exibe o perfil de um usuário específico.
+     */
+    public function show(string $id): View
     {
-        $movies = Movie::latest()->paginate(12);
-        return view('movies.index', compact('movies'));
-    }
-
-    public function show(Movie $movie): View
-    {
-        // Route Model Binding — Laravel injeta o model automaticamente
-        return view('movies.show', compact('movie'));
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'title'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'release_year' => 'required|integer|min:1888|max:2099',
+        return view('user.profile', [
+            'user' => User::findOrFail($id),
         ]);
-
-        Movie::create($validated);
-
-        return redirect()->route('movies.index')
-            ->with('success', 'Filme criado com sucesso!');
     }
+}
+
+// routes/web.php
+use App\Http\Controllers\UserController;
+
+Route::get('/user/{id}', [UserController::class, 'show']);`,
+			Explanation: "findOrFail() lança ModelNotFoundException (HTTP 404) se não encontrar.\n" +
+				"Type hint View no retorno ajuda a IDE e documenta a intenção do método.\n" +
+				"O Controller base não é obrigatório no Laravel 11+ mas é boa prática manter.",
+			Language: "php",
+		},
+		{
+			ID:    "controller-invokable",
+			Title: "Single Action Controller",
+			Description: "Quando um controller tem apenas uma ação, implemente __invoke().\n" +
+				"Mantém o arquivo focado e a rota mais legível.",
+			Code: `// Terminal
+php artisan make:controller ProvisionServer --invokable
+
+// app/Http/Controllers/ProvisionServer.php
+<?php
+
+namespace App\Http\Controllers;
+
+class ProvisionServer extends Controller
+{
+    /**
+     * Provisiona um novo servidor web.
+     */
+    public function __invoke()
+    {
+        // lógica aqui...
+    }
+}
+
+// routes/web.php — sem especificar método
+use App\Http\Controllers\ProvisionServer;
+
+Route::post('/server', ProvisionServer::class);`,
+			Explanation: "Invokable controllers seguem o princípio de responsabilidade única.\n" +
+				"Ideal para actions complexas: ProcessPayment, SendWelcomeEmail, GenerateReport.\n" +
+				"Na rota, passe a classe diretamente sem array — Laravel chama __invoke() automaticamente.",
+			Language: "php",
+		},
+		{
+			ID:    "controller-middleware",
+			Title: "Middleware no Controller",
+			Description: "Aplica middleware a métodos específicos diretamente no controller.\n" +
+				"Laravel 11+ usa a interface HasMiddleware em vez do construtor.",
+			Code: `<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class UserController extends Controller implements HasMiddleware
+{
+    /**
+     * Middleware aplicado ao controller.
+     */
+    public static function middleware(): array
+    {
+        return [
+            'auth',                                          // todos os métodos
+            new Middleware('log', only: ['index']),          // só index
+            new Middleware('subscribed', except: ['store']), // todos exceto store
+        ];
+    }
+
+    public function index() { /* ... */ }
+    public function store() { /* ... */ }
 }`,
-			Explanation: "Type hints nos retornos (`View`, `RedirectResponse`) melhoram IDE e legibilidade. " +
-				"Route Model Binding (`Movie $movie`) elimina o `Movie::findOrFail($id)` manual. " +
-				"Sempre retorne `redirect()->with()` após POST para seguir o padrão PRG.",
+			Explanation: "HasMiddleware substitui o $this->middleware() do construtor do Laravel 10.\n" +
+				"only e except aceitam arrays: only: ['index', 'show'].\n" +
+				"Middleware aplicado na rota tem precedência sobre o do controller.",
 			Language: "php",
 		},
 		{
 			ID:    "controller-resource",
 			Title: "Resource Controller",
-			Description: "Implementa os 7 métodos CRUD convencionais. " +
-				"Gerado com `php artisan make:controller MovieController --resource --model=Movie`.",
-			Code: `<?php
+			Description: "Implementa os 7 métodos CRUD padrão. O Artisan gera o esqueleto completo.\n" +
+				"Com --model, já injeta o model via Route Model Binding.",
+			Code: `// Terminal
+php artisan make:controller PhotoController --resource --model=Photo
+
+// app/Http/Controllers/PhotoController.php
+<?php
+
 namespace App\Http\Controllers;
 
-use App\Models\Movie;
-use App\Http\Requests\StoreMovieRequest;
-use App\Http\Requests\UpdateMovieRequest;
+use App\Models\Photo;
+use Illuminate\Http\Request;
 
-class MovieController extends Controller
+class PhotoController extends Controller
 {
-    public function index()    { /* lista todos */ }
-    public function create()   { /* form de criação */ }
-    public function store(StoreMovieRequest $request)
+    public function index()
     {
-        // Form Request cuida da validação e autorização
-        $movie = Movie::create($request->validated());
-        return redirect()->route('movies.show', $movie);
+        $photos = Photo::latest()->paginate(20);
+        return view('photos.index', compact('photos'));
     }
-    public function show(Movie $movie)  { /* detalhe */ }
-    public function edit(Movie $movie)  { /* form de edição */ }
-    public function update(UpdateMovieRequest $request, Movie $movie)
+
+    public function create()
     {
-        $movie->update($request->validated());
-        return redirect()->route('movies.show', $movie);
+        return view('photos.create');
     }
-    public function destroy(Movie $movie)
+
+    public function store(Request $request)
     {
-        $movie->delete();
-        return redirect()->route('movies.index');
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'image' => 'required|image|max:2048',
+        ]);
+
+        Photo::create($validated);
+
+        return redirect()->route('photos.index')
+            ->with('success', 'Foto criada!');
+    }
+
+    public function show(Photo $photo)        // Route Model Binding
+    {
+        return view('photos.show', compact('photo'));
+    }
+
+    public function edit(Photo $photo)
+    {
+        return view('photos.edit', compact('photo'));
+    }
+
+    public function update(Request $request, Photo $photo)
+    {
+        $photo->update($request->validated());
+        return redirect()->route('photos.show', $photo);
+    }
+
+    public function destroy(Photo $photo)
+    {
+        $photo->delete();
+        return redirect()->route('photos.index');
     }
 }`,
-			Explanation: "Form Requests (`make:request`) centralizam validação e autorização fora do controller. " +
-				"Use `$request->validated()` — nunca `$request->all()` — para só passar campos validados ao model.",
+			Explanation: "Route Model Binding: Laravel busca Photo::find($id) automaticamente quando\n" +
+				"o tipo-hint do parâmetro é o model. Se não encontrar, retorna 404.\n" +
+				"Sempre use $request->validated() — nunca $request->all() — para evitar mass assignment.",
 			Language: "php",
 		},
 	},
