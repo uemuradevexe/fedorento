@@ -7,10 +7,11 @@ var ControllersSection = data.Section{
 	Title: "Controllers",
 	Topics: []data.Topic{
 		{
-			ID:    "controller-basic",
-			Title: "Controller Básico",
-			Description: "Agrupa a lógica de tratamento de requisições em uma classe.\n" +
-				"Criado em app/Http/Controllers. Gerado via Artisan.",
+			ID:       "controller-basic",
+			Title:    "Controller Básico",
+			Audience: "web",
+			Description: "Organiza ações HTTP relacionadas dentro de uma classe dedicada, em vez de espalhar lógica nas rotas.\n" +
+				"No Laravel 13, esse continua sendo o ponto de partida mais comum para estruturar endpoints web e API de forma limpa.",
 			Code: `// Terminal
 php artisan make:controller UserController
 
@@ -39,16 +40,17 @@ class UserController extends Controller
 use App\Http\Controllers\UserController;
 
 Route::get('/user/{id}', [UserController::class, 'show']);`,
-			Explanation: "findOrFail() lança ModelNotFoundException (HTTP 404) se não encontrar.\n" +
-				"Type hint View no retorno ajuda a IDE e documenta a intenção do método.\n" +
-				"O Controller base não é obrigatório no Laravel 11+ mas é boa prática manter.",
+			Explanation: "Use controllers quando a ação já merece nome, teste e evolução própria.\n" +
+				"A documentação também reforça que métodos públicos podem receber dependências por injeção do container.\n" +
+				"O controller base não é obrigatório, mas costuma ser útil para concentrar comportamento compartilhado do projeto.",
 			Language: "php",
 		},
 		{
-			ID:    "controller-invokable",
-			Title: "Single Action Controller",
-			Description: "Quando um controller tem apenas uma ação, implemente __invoke().\n" +
-				"Mantém o arquivo focado e a rota mais legível.",
+			ID:       "controller-invokable",
+			Title:    "Single Action Controller",
+			Audience: "shared",
+			Description: "Use esse formato quando uma classe representar exatamente uma ação HTTP ou um caso de uso.\n" +
+				"Ao implementar __invoke(), a rota aponta direto para a classe e o arquivo fica enxuto e focado.",
 			Code: `// Terminal
 php artisan make:controller ProvisionServer --invokable
 
@@ -72,16 +74,17 @@ class ProvisionServer extends Controller
 use App\Http\Controllers\ProvisionServer;
 
 Route::post('/server', ProvisionServer::class);`,
-			Explanation: "Invokable controllers seguem o princípio de responsabilidade única.\n" +
-				"Ideal para actions complexas: ProcessPayment, SendWelcomeEmail, GenerateReport.\n" +
-				"Na rota, passe a classe diretamente sem array — Laravel chama __invoke() automaticamente.",
+			Explanation: "Esse estilo combina bem com ações orientadas a intenção, como processar pagamento ou provisionar recurso.\n" +
+				"Ele evita controllers gigantes e deixa a rota mais legível.\n" +
+				"Também facilita testes isolados porque cada classe tende a ter uma única responsabilidade.",
 			Language: "php",
 		},
 		{
-			ID:    "controller-middleware",
-			Title: "Middleware no Controller",
-			Description: "Aplica middleware a métodos específicos diretamente no controller.\n" +
-				"Laravel 11+ usa a interface HasMiddleware em vez do construtor.",
+			ID:       "controller-middleware",
+			Title:    "Middleware no Controller",
+			Audience: "shared",
+			Description: "Permite declarar regras transversais do próprio controller, como autenticação, logging e assinatura ativa.\n" +
+				"No Laravel 13, isso pode ser feito com HasMiddleware ou com atributos PHP, dependendo do estilo adotado pelo projeto.",
 			Code: `<?php
 
 namespace App\Http\Controllers;
@@ -106,18 +109,19 @@ class UserController extends Controller implements HasMiddleware
     public function index() { /* ... */ }
     public function store() { /* ... */ }
 }`,
-			Explanation: "HasMiddleware substitui o $this->middleware() do construtor do Laravel 10.\n" +
-				"only e except aceitam arrays: only: ['index', 'show'].\n" +
-				"Middleware aplicado na rota tem precedência sobre o do controller.",
+			Explanation: "A principal vantagem é manter as regras de acesso perto das ações que elas protegem.\n" +
+				"A docs também mostra atributos como #[Middleware] quando a declaração precisa ficar ainda mais local.\n" +
+				"Use only e except para evitar duplicação e deixar explícito quais métodos participam de cada regra.",
 			Language: "php",
 		},
 		{
-			ID:    "controller-resource",
-			Title: "Resource Controller",
-			Description: "Implementa os 7 métodos CRUD padrão. O Artisan gera o esqueleto completo.\n" +
-				"Com --model, já injeta o model via Route Model Binding.",
+			ID:       "controller-resource",
+			Title:    "Resource Controller",
+			Audience: "shared",
+			Description: "Empacota o ciclo CRUD completo de um recurso em um controller com convenções conhecidas pelo framework.\n" +
+				"No Laravel 13, ele trabalha junto com Route::resource, implicit model binding e form requests para reduzir bastante repetição.",
 			Code: `// Terminal
-php artisan make:controller PhotoController --resource --model=Photo
+php artisan make:controller PhotoController --resource --model=Photo --requests
 
 // app/Http/Controllers/PhotoController.php
 <?php
@@ -125,7 +129,8 @@ php artisan make:controller PhotoController --resource --model=Photo
 namespace App\Http\Controllers;
 
 use App\Models\Photo;
-use Illuminate\Http\Request;
+use App\Http\Requests\StorePhotoRequest;
+use App\Http\Requests\UpdatePhotoRequest;
 
 class PhotoController extends Controller
 {
@@ -140,17 +145,12 @@ class PhotoController extends Controller
         return view('photos.create');
     }
 
-    public function store(Request $request)
+    public function store(StorePhotoRequest $request)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'image' => 'required|image|max:2048',
-        ]);
-
-        Photo::create($validated);
+        $photo = Photo::create($request->validated());
 
         return redirect()->route('photos.index')
-            ->with('success', 'Foto criada!');
+            ->with('success', "{$photo->title} criada com sucesso.");
     }
 
     public function show(Photo $photo)        // Route Model Binding
@@ -163,9 +163,10 @@ class PhotoController extends Controller
         return view('photos.edit', compact('photo'));
     }
 
-    public function update(Request $request, Photo $photo)
+    public function update(UpdatePhotoRequest $request, Photo $photo)
     {
         $photo->update($request->validated());
+
         return redirect()->route('photos.show', $photo);
     }
 
@@ -175,9 +176,9 @@ class PhotoController extends Controller
         return redirect()->route('photos.index');
     }
 }`,
-			Explanation: "Route Model Binding: Laravel busca Photo::find($id) automaticamente quando\n" +
-				"o tipo-hint do parâmetro é o model. Se não encontrar, retorna 404.\n" +
-				"Sempre use $request->validated() — nunca $request->all() — para evitar mass assignment.",
+			Explanation: "A força desse padrão está em padronizar nomes, URIs, redirects e binding do recurso inteiro.\n" +
+				"Com --model e --requests, o Artisan já aproxima o código do formato recomendado para produção.\n" +
+				"Quando o recurso é API-only, prefira apiResource ou controllers gerados com --api.",
 			Language: "php",
 		},
 	},

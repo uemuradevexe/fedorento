@@ -9,8 +9,8 @@ var MigrationsSection = data.Section{
 		{
 			ID:    "migration-structure",
 			Title: "Estrutura de uma Migration",
-			Description: "Toda migration tem dois métodos: up() adiciona, down() reverte.\n" +
-				"São o controle de versão do banco de dados do seu projeto.",
+			Description: "Migration é o histórico versionado da estrutura do banco.\n" +
+				"No Laravel 13, ela continua sendo a forma principal de compartilhar schema entre ambientes e manter deploys reproduzíveis.",
 			Code: `// Terminal
 php artisan make:migration create_flights_table
 
@@ -50,16 +50,16 @@ return new class extends Migration
 // php artisan migrate:rollback  — reverte o último lote
 // php artisan migrate:fresh     — drop all + migrate (DEV ONLY)
 // php artisan migrate:status    — lista status de cada migration`,
-			Explanation: "down() deve ser o inverso exato de up().\n" +
-				"migrate:fresh apaga tudo e recria — nunca use em produção.\n" +
-				"Nunca edite uma migration já executada em produção — crie uma nova migration.",
+			Explanation: "A documentação reforça que up aplica a mudança e down descreve a reversão correspondente.\n" +
+				"O nome do arquivo com timestamp define a ordem de execução e permite replay consistente do schema.\n" +
+				"Depois que algo foi para produção, o caminho seguro quase sempre é criar nova migration em vez de reescrever a antiga.",
 			Language: "php",
 		},
 		{
 			ID:    "migration-columns",
 			Title: "Tipos de Colunas",
-			Description: "Blueprint oferece métodos para todos os tipos SQL mais comuns.\n" +
-				"Modificadores complementam o tipo (nullable, default, unsigned, etc).",
+			Description: "O Schema Blueprint expõe métodos semânticos para declarar colunas de forma agnóstica ao banco.\n" +
+				"A ideia é escrever a intenção do domínio e deixar o Laravel traduzir isso para o dialeto suportado pelo driver.",
 			Code: `Schema::create('movies', function (Blueprint $table) {
     // Identificação
     $table->id();                          // BIGINT UNSIGNED AUTO_INCREMENT PK
@@ -89,16 +89,16 @@ return new class extends Migration
     $table->softDeletes();   // coluna deleted_at
     $table->timestamps();    // created_at + updated_at
 });`,
-			Explanation: "id() é equivalente a bigIncrements('id') — BIGINT UNSIGNED PK.\n" +
-				"nullable() permite NULL — campos opcionais sempre devem ser nullable.\n" +
-				"softDeletes() registra quando foi deletado em vez de remover o row.",
+			Explanation: "Além do tipo em si, modifiers como nullable, default e unique definem o comportamento real da coluna.\n" +
+				"A documentação também destaca tipos modernos como json, uuid, ulid e métodos específicos para relacionamento.\n" +
+				"Escolher bem o tipo desde o início reduz casts desnecessários e migrações corretivas depois.",
 			Language: "php",
 		},
 		{
 			ID:    "migration-foreign",
 			Title: "Chaves Estrangeiras",
-			Description: "foreignId() com constrained() cria FK com índice automaticamente.\n" +
-				"onDelete e onUpdate controlam o comportamento em cascata.",
+			Description: "Definem integridade referencial direto no schema, não apenas por convenção no código.\n" +
+				"No Laravel 13, foreignId e constrained continuam sendo o caminho mais expressivo para criar relações típicas com pouco boilerplate.",
 			Code: `// FK simples — infere tabela pelo nome da coluna
 Schema::table('posts', function (Blueprint $table) {
     $table->foreignId('user_id')->constrained();
@@ -126,17 +126,16 @@ Schema::create('genre_movie', function (Blueprint $table) {
     $table->foreignId('movie_id')->constrained()->cascadeOnDelete();
     $table->primary(['genre_id', 'movie_id']); // PK composta
 });`,
-			Explanation: "constrained() infere a tabela: user_id → users, movie_id → movies.\n" +
-				"cascadeOnDelete() remove os filhos quando o pai é deletado.\n" +
-				"nullOnDelete() seta NULL nos filhos — útil para relações opcionais.\n" +
-				"A PK composta na pivot evita duplicatas na relação.",
+			Explanation: "A documentação trata constraint como regra de verdade do banco, não como detalhe opcional.\n" +
+				"cascadeOnDelete, restrictOnDelete e nullOnDelete devem refletir o comportamento real do negócio.\n" +
+				"Em tabelas pivot, índices e chave composta ajudam a impedir relações duplicadas e manter consultas previsíveis.",
 			Language: "php",
 		},
 		{
 			ID:    "migration-alter",
 			Title: "Alterando Tabelas Existentes",
-			Description: "Migrations para modificar colunas existentes em produção.\n" +
-				"Siga o padrão expand/contract para zero downtime.",
+			Description: "Nem toda migration cria tabela; muitas existem para evoluir estruturas já em produção.\n" +
+				"Esse tipo de mudança exige mais cuidado porque pode afetar dados, locks, deploys paralelos e compatibilidade entre versões do código.",
 			Code: `// Adicionar coluna nova
 // php artisan make:migration add_poster_url_to_movies_table
 
@@ -167,10 +166,9 @@ Schema::table('movies', function (Blueprint $table) {
     $table->index('release_year');
     $table->unique(['title', 'release_year']); // índice composto
 });`,
-			Explanation: "after() posiciona a coluna logo após a especificada (MySQL only).\n" +
-				"change() requer o pacote doctrine/dbal no Laravel < 11.\n" +
-				"Em produção: sempre adicione colunas nullable, depois popule, depois adicione constraint.\n" +
-				"Isso é o padrão expand/contract — evita downtime em deploys.",
+			Explanation: "A documentação mostra rename, change, drop e criação de índices como operações comuns de manutenção.\n" +
+				"Em produção, prefira mudanças graduais: expandir primeiro, migrar dados, só depois apertar constraints e remover legado.\n" +
+				"Esse fluxo reduz risco de downtime e evita quebrar versões antigas do app durante o deploy.",
 			Language: "php",
 		},
 	},

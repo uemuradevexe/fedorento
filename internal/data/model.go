@@ -4,6 +4,7 @@ package data
 type Topic struct {
 	ID          string
 	Title       string
+	Audience    string // "web", "api", or "shared"
 	Description string
 	Code        string
 	Explanation string

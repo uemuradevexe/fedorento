@@ -9,8 +9,8 @@ var EloquentSection = data.Section{
 		{
 			ID:    "eloquent-insert-update",
 			Title: "Inserindo e Atualizando",
-			Description: "Eloquent oferece múltiplas formas de persistir dados.\n" +
-				"Conheça as diferenças entre new + save(), create(), e updateOrCreate().",
+			Description: "Eloquent oferece diferentes estratégias para persistir dados dependendo do fluxo de criação e atualização.\n" +
+				"A documentação do Laravel 13 separa bem quando usar instância manual, mass assignment, métodos *OrCreate* e updates em massa.",
 			Code: `use App\Models\Flight;
 
 // --- INSERIR ---
@@ -50,17 +50,16 @@ $flight = Flight::updateOrCreate(
     ['departure' => 'Oakland', 'destination' => 'San Diego'],
     ['price' => 99, 'discounted' => 1]
 );`,
-			Explanation: "create() exige que os campos estejam em $fillable no model.\n" +
-				"firstOrCreate() evita duplicatas — ideal para seeds e imports.\n" +
-				"updateOrCreate() é o upsert do Eloquent — busca pela condição, atualiza ou cria.\n" +
-				"update() em massa não dispara eventos do model (creating, updating, etc).",
+			Explanation: "save() é explícito e funciona bem quando a entidade é montada passo a passo.\n" +
+				"create() e updateOrCreate() reduzem boilerplate, mas dependem de uma política clara de mass assignment.\n" +
+				"A documentação também lembra que updates em massa pulam eventos do model porque os registros não são hidratados individualmente.",
 			Language: "php",
 		},
 		{
 			ID:    "eloquent-deleting",
 			Title: "Deletando Registros",
-			Description: "Delete, soft delete e restore. Soft delete é preferível em dados sensíveis\n" +
-				"— preserva o histórico e permite recuperação.",
+			Description: "Eloquent suporta remoção definitiva, remoção lógica e restauração de registros.\n" +
+				"A escolha entre hard delete e soft delete depende do valor histórico do dado e das regras de auditoria do domínio.",
 			Code: `use App\Models\Flight;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -95,16 +94,16 @@ $flight->restore();
 
 // Force delete — remove do banco mesmo com soft delete ativado
 $flight->forceDelete();`,
-			Explanation: "SoftDeletes adiciona o trait no model E softDeletes() na migration.\n" +
-				"withTrashed() é útil em painéis admin para ver histórico completo.\n" +
-				"forceDelete() contorna o soft delete — use com cautela em produção.",
+			Explanation: "Soft delete não remove a linha; ele apenas preenche deleted_at e ajusta as queries padrão.\n" +
+				"A documentação mostra withTrashed e onlyTrashed como ferramentas para fluxos de admin, recuperação e histórico.\n" +
+				"forceDelete deve ser reservado para cenários em que apagar de verdade é um requisito explícito.",
 			Language: "php",
 		},
 		{
 			ID:    "eloquent-relationships",
 			Title: "Relacionamentos",
-			Description: "Eloquent suporta todos os tipos de relacionamento SQL.\n" +
-				"Defina métodos no model para navegar entre registros relacionados.",
+			Description: "Relacionamentos permitem modelar como registros se conectam e também consultar essas conexões de forma fluente.\n" +
+				"A documentação trata cada relação como método do model e, ao mesmo tempo, como query builder reutilizável.",
 			Code: `<?php
 // --- HAS MANY (Um para Muitos) ---
 class Post extends Model
@@ -147,16 +146,16 @@ $post->comments()->create([
 $movie->genres()->attach([1, 2, 3]);       // adiciona
 $movie->genres()->detach([1]);             // remove
 $movie->genres()->sync([2, 3, 4]);         // sincroniza (remove antigos)`,
-			Explanation: "Sempre type-hint o retorno dos métodos de relacionamento — ajuda a IDE.\n" +
-				"Use with() para eager load e evitar N+1 queries.\n" +
-				"sync() é preferível a attach() em updates — evita duplicatas automaticamente.",
+			Explanation: "hasMany, belongsTo e belongsToMany cobrem boa parte dos casos do dia a dia.\n" +
+				"A documentação também reforça convenções de chaves, propriedades dinâmicas e customização quando o banco foge do padrão.\n" +
+				"Definir relações corretamente simplifica criação de filhos, filtros por relação e carregamento antecipado.",
 			Language: "php",
 		},
 		{
 			ID:    "eloquent-eager",
 			Title: "Eager Loading",
-			Description: "Carrega relacionamentos junto com a query principal.\n" +
-				"Elimina o problema N+1 — essencial para performance.",
+			Description: "Eager loading carrega relações de forma planejada para evitar consultas extras em loops.\n" +
+				"Na prática, ele é uma das otimizações mais importantes ao sair de exemplos simples e entrar em listagens reais.",
 			Code: `use App\Models\User;
 
 // SEM eager loading — N+1 problem (1 query + N queries)
@@ -194,16 +193,16 @@ $user = User::find(1);
 if ($someCondition) {
     $user->load('posts');
 }`,
-			Explanation: "N+1 problem: 1 query para os users + 1 query POR user para os posts.\n" +
-				"with() resolve isso com 2 queries: busca users, depois posts WHERE user_id IN (1,2,3...).\n" +
-				"load() carrega relacionamentos de uma collection já existente — evita refetch.",
+			Explanation: "A documentação do Laravel 13 detalha with para eager load inicial e load para eager load tardio.\n" +
+				"Também vale combinar eager loading com constraints para não trazer filhos desnecessários.\n" +
+				"Se o projeto quiser endurecer isso, o framework ainda permite impedir lazy loading em desenvolvimento.",
 			Language: "php",
 		},
 		{
 			ID:    "eloquent-collections",
 			Title: "Collections",
-			Description: "Eloquent retorna Collections — arrays com superpoderes.\n" +
-				"Operações funcionais encadeáveis: map, filter, groupBy, flatMap e mais.",
+			Description: "Consultas que retornam vários models produzem Eloquent Collections, não arrays crus.\n" +
+				"Isso permite tratar o resultado com uma API funcional rica antes de renderizar, agregar ou transformar os dados.",
 			Code: `use App\Models\User;
 
 // get() retorna uma Collection
@@ -246,9 +245,9 @@ $top = Movie::with('reviews')
     ->sortByDesc(fn ($m) => $m->reviews->avg('rating'))
     ->take(5)
     ->values(); // values() reindexa o array`,
-			Explanation: "filter() mantém as keys originais — use values() para reiniciar índices.\n" +
-				"flatMap() é útil para achatar coleções de coleções (ex: genres de múltiplos movies).\n" +
-				"Para grandes datasets, prefira orderBy/groupBy na query SQL em vez de na collection.",
+			Explanation: "A documentação lembra que Eloquent Collection estende a Collection base e ainda adiciona comportamentos próprios de models.\n" +
+				"Métodos como map, filter e groupBy são ótimos depois que o conjunto já está em memória.\n" +
+				"Mas, para volumes altos, continua sendo melhor empurrar ordenação, filtro e agregação para o SQL.",
 			Language: "php",
 		},
 	},

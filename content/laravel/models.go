@@ -9,8 +9,8 @@ var ModelsSection = data.Section{
 		{
 			ID:    "model-conventions",
 			Title: "Convenções e Configuração",
-			Description: "Eloquent infere tabela, chave primária e timestamps automaticamente.\n" +
-				"Conheça as convenções para saber quando e como sobrescrevê-las.",
+			Description: "Todo model Eloquent representa uma tabela e já nasce com várias convenções configuradas automaticamente.\n" +
+				"No Laravel 13, vale entender primeiro esse caminho feliz antes de começar a sobrescrever nomes, chaves e conexões.",
 			Code: `// Terminal
 php artisan make:model Flight              // só o model
 php artisan make:model Flight --migration  // model + migration
@@ -21,32 +21,33 @@ php artisan make:model Flight -mfsc        // model + migration + factory + seed
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Connection;
+use Illuminate\Database\Eloquent\Attributes\DateFormat;
+use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Attributes\WithoutTimestamps;
 use Illuminate\Database\Eloquent\Model;
 
+#[Table('my_flights', key: 'flight_id')]
+#[Connection('sqlite')]
+#[DateFormat('U')]
+#[WithoutTimestamps]
 class Flight extends Model
 {
-    // Convenções automáticas (não precisa declarar se seguir):
-    // tabela     → 'flights'   (plural snake_case do nome da classe)
-    // chave PK   → 'id'
-    // timestamps → created_at, updated_at
-
-    // Sobrescrever quando necessário:
-    protected $table = 'my_flights';       // nome de tabela diferente
-    protected $primaryKey = 'flight_id';   // PK diferente
-    public $timestamps = false;            // sem timestamps
-    protected $dateFormat = 'U';           // Unix timestamp
-    protected $connection = 'sqlite';      // conexão específica
+    // Se seguir as convenções, nem precisa declarar nada:
+    // tabela     → flights
+    // chave PK   → id
+    // timestamps → created_at e updated_at
 }`,
-			Explanation: "Seguir as convenções economiza código de configuração.\n" +
-				"Se herdar um banco legado com nomes diferentes, use $table e $primaryKey.\n" +
-				"$dateFormat = 'U' armazena datas como Unix timestamp (inteiro) em vez de datetime.",
+			Explanation: "Tabela plural em snake_case, chave id e timestamps são o caminho feliz do framework.\n" +
+				"No Laravel 13, parte dessa configuração também pode ser expressa com attributes como #[Table], #[Connection] e #[DateFormat].\n" +
+				"Quanto menos exceções você cria, mais natural fica integrar factories, bindings e relacionamentos.",
 			Language: "php",
 		},
 		{
 			ID:    "model-fillable",
 			Title: "Mass Assignment",
-			Description: "Protege o model de receber campos não autorizados via create() ou fill().\n" +
-				"Laravel 13 suporta tanto $fillable quanto o atributo PHP #[Fillable].",
+			Description: "Controla quais atributos podem ser preenchidos em massa por create, update e fill.\n" +
+				"Essa proteção evita que campos sensíveis sejam alterados silenciosamente a partir de input externo.",
 			Code: `<?php
 
 namespace App\Models;
@@ -83,16 +84,16 @@ $flight = Flight::create([
     'airline'     => 'British Airways',
     'destination' => 'CDG',
 ]);`,
-			Explanation: "MassAssignmentException é lançada se tentar preencher campo não listado em $fillable.\n" +
-				"$guarded = [] desabilita a proteção — só use se tiver validação rigorosa antes.\n" +
-				"Nunca passe $request->all() direto para create() — use $request->validated().",
+			Explanation: "A documentação do Laravel 13 mostra duas formas principais: a clássica com $fillable e a moderna com #[Fillable].\n" +
+				"Se o app estiver em modo estrito, preencher atributo não permitido pode falhar cedo e expor problema de modelagem.\n" +
+				"O fluxo seguro continua sendo validar antes e repassar apenas dados já autorizados ao model.",
 			Language: "php",
 		},
 		{
 			ID:    "model-retrieving",
 			Title: "Buscando Registros",
-			Description: "Eloquent retorna Collections ou instâncias do model.\n" +
-				"Conheça os métodos mais usados para buscar dados.",
+			Description: "Eloquent funciona como um query builder orientado a models.\n" +
+				"A partir dele você busca um registro, uma coleção ou agregados com uma API fluente e consistente com o restante do framework.",
 			Code: `use App\Models\Flight;
 
 // Todos os registros (retorna Collection)
@@ -110,6 +111,9 @@ $flight = Flight::find(1);
 // Buscar por PK — lança 404 se não encontrar
 $flight = Flight::findOrFail(1);
 
+// Primeira ocorrência por coluna
+$flight = Flight::firstWhere('active', 1);
+
 // Primeiro resultado
 $flight = Flight::where('active', 1)->first();
 
@@ -124,16 +128,16 @@ $count = Flight::where('active', 1)->count();
 
 // Verificar existência
 $exists = Flight::where('destination', 'Sydney')->exists();`,
-			Explanation: "all() carrega TUDO da tabela — evite em tabelas grandes, use paginate().\n" +
-				"findOrFail() e firstOrFail() são preferidos em controllers: retornam 404 automaticamente.\n" +
-				"get() executa a query; métodos como where() constroem o query builder sem executar.",
+			Explanation: "find, first, firstWhere, get, count e exists cobrem a maior parte do trabalho cotidiano.\n" +
+				"A docs também alerta para o custo de all() em tabelas grandes e recomenda chunk, lazy ou cursor para grandes volumes.\n" +
+				"Em controllers, os métodos *OrFail* combinam bem com a resposta 404 automática do Laravel.",
 			Language: "php",
 		},
 		{
 			ID:    "model-casts",
 			Title: "Casts e Mutators",
-			Description: "Casts convertem atributos automaticamente ao ler/escrever no banco.\n" +
-				"Accessors e Mutators (Laravel 9+) transformam valores com Attribute::make().",
+			Description: "Casts, accessors e mutators moldam a forma como o dado entra e sai do model.\n" +
+				"Eles ajudam a manter conversões e regras de apresentação perto da camada de domínio, sem espalhar transformação por controllers e views.",
 			Code: `<?php
 
 namespace App\Models;
@@ -174,9 +178,9 @@ $user = User::find(1);
 echo $user->first_name;  // Chama o accessor
 $user->name = 'JOHN';    // Chama o mutator (salva 'john')
 $user->save();`,
-			Explanation: "cast 'array' serializa/deserializa JSON automaticamente — ideal para configurações.\n" +
-				"Accessors não alteram o banco, só o valor retornado pelo model.\n" +
-				"Mutators transformam o valor ANTES de salvar no banco.",
+			Explanation: "A docs separa bem três responsabilidades: casts tipam valores, accessors modelam leitura e mutators modelam escrita.\n" +
+				"Isso é útil para datas, JSON, booleans, valores monetários e normalização de texto.\n" +
+				"Quando bem usados, esses recursos deixam o resto da aplicação consumir o model em formato mais previsível.",
 			Language: "php",
 		},
 	},

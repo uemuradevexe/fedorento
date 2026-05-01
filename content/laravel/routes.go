@@ -7,12 +7,14 @@ var RoutesSection = data.Section{
 	Title: "Rotas",
 	Topics: []data.Topic{
 		{
-			ID:    "routes-basic",
-			Title: "Rota Básica (Closure)",
-			Description: "A forma mais simples: URI + closure. Definida em routes/web.php.\n" +
-				"Serve para prototipagem — em produção prefira Controllers.",
+			ID:       "routes-basic",
+			Title:    "Rota Básica (Closure)",
+			Audience: "shared",
+			Description: "A porta de entrada mais direta do roteador: um verbo HTTP, uma URI e um callback.\n" +
+				"No Laravel 13, rotas web vivem em routes/web.php e já recebem o grupo web com sessão, cookies e proteção CSRF.",
 			Code: `use Illuminate\Support\Facades\Route;
 
+// routes/web.php
 Route::get('/greeting', function () {
     return 'Hello World';
 });
@@ -24,17 +26,23 @@ Route::delete('/users/{id}', function (string $id) { /* ... */ });
 
 // Responder a múltiplos verbos
 Route::match(['get', 'post'], '/form', function () { /* ... */ });
-Route::any('/anything', function () { /* ... */ });`,
-			Explanation: "Cada método (get, post, put, delete) corresponde a um verbo HTTP.\n" +
-				"O segundo argumento pode ser uma closure ou um array [Controller::class, 'método'].\n" +
-				"Use Route::any() com cuidado — prefira ser explícito com o verbo.",
+Route::any('/anything', function () { /* ... */ });
+
+// routes/api.php
+Route::get('/user', function (\Illuminate\Http\Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');`,
+			Explanation: "Closures são ótimas para exemplos rápidos, health checks e endpoints pequenos.\n" +
+				"Quando a lógica cresce, mova para controllers para manter rotas curtas e organizadas.\n" +
+				"A documentação também reforça ser explícito com verbos e evitar Route::any() quando o comportamento real é restrito.",
 			Language: "php",
 		},
 		{
-			ID:    "routes-params",
-			Title: "Parâmetros de Rota",
-			Description: "Capturam segmentos dinâmicos da URI. Parâmetros obrigatórios usam {nome},\n" +
-				"opcionais usam {nome?} com valor padrão no método.",
+			ID:       "routes-params",
+			Title:    "Parâmetros de Rota",
+			Audience: "shared",
+			Description: "Capturam trechos dinâmicos da URI para dentro da closure ou do controller.\n" +
+				"A documentação destaca parâmetros obrigatórios, opcionais e constraints para garantir que a rota aceite apenas formatos válidos.",
 			Code: `// Parâmetro obrigatório
 Route::get('/user/{id}', function (string $id) {
     return 'User ' . $id;
@@ -62,16 +70,17 @@ Route::get('/user/{id}', function (string $id) {
 Route::get('/user/{id}', function (string $id) {
     // ...
 })->whereNumber('id');`,
-			Explanation: "Parâmetros são injetados na closure/controller na mesma ordem que aparecem na URI.\n" +
-				"whereNumber(), whereAlpha(), whereAlphaNumeric() são atalhos para regex comuns.\n" +
-				"Restrições evitam que rotas erradas sejam acionadas (ex: /user/abc quando espera número).",
+			Explanation: "Os nomes dos placeholders importam para model binding, mas a injeção posicional continua valendo.\n" +
+				"Use whereNumber, whereUuid, whereUlid e whereIn para documentar a intenção sem regex verbosa.\n" +
+				"Se a constraint falhar, o Laravel responde com 404 em vez de cair numa action errada.",
 			Language: "php",
 		},
 		{
-			ID:    "routes-named",
-			Title: "Rotas Nomeadas",
-			Description: "Atribui um nome à rota para gerar URLs e redirects sem hardcode de strings.\n" +
-				"Indispensável em projetos reais — renomear uma URI não quebra os links.",
+			ID:       "routes-named",
+			Title:    "Rotas Nomeadas",
+			Audience: "shared",
+			Description: "Dá uma identidade estável para a rota além da URI física.\n" +
+				"Com isso, links, redirects e verificações da rota atual passam a depender do nome, não de strings hardcoded.",
 			Code: `// Definir nome
 Route::get('/user/profile', function () {
     // ...
@@ -97,16 +106,17 @@ return redirect()->route('profile');
 if ($request->routeIs('profile')) {
     // ...
 }`,
-			Explanation: "A convenção de nomes usa ponto como separador: 'user.profile', 'admin.posts.index'.\n" +
-				"Route::resource() gera nomes automáticos (photos.index, photos.show, etc).\n" +
-				"Execute php artisan route:list para ver todos os nomes registrados.",
+			Explanation: "A documentação recomenda nomes únicos e previsíveis, normalmente com notação por pontos.\n" +
+				"route(), redirect()->route() e to_route() passam a funcionar sem acoplamento à URL final.\n" +
+				"Isso facilita refactors, internacionalização de paths e reorganização de grupos sem quebrar chamadas.",
 			Language: "php",
 		},
 		{
-			ID:    "routes-groups",
-			Title: "Grupos de Rotas",
-			Description: "Agrupa rotas que compartilham middleware, prefix ou namespace.\n" +
-				"Evita repetição e mantém routes/web.php organizado.",
+			ID:       "routes-groups",
+			Title:    "Grupos de Rotas",
+			Audience: "shared",
+			Description: "Permitem compartilhar atributos entre várias rotas de uma vez.\n" +
+				"São a base para organizar áreas como admin, APIs internas, webhooks e módulos protegidos por middleware.",
 			Code: `// Grupo com middleware
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () { /* ... */ });
@@ -135,18 +145,20 @@ Route::middleware(['auth', 'admin'])
         Route::resource('users', AdminUserController::class);
         Route::resource('movies', AdminMovieController::class);
     });`,
-			Explanation: "Grupos podem ser aninhados — o Laravel mescla os atributos de cada nível.\n" +
-				"middleware(['auth', 'verified']) aplica ambos na ordem listada.\n" +
-				"Route::resource() dentro de grupos herda prefix e name do grupo.",
+			Explanation: "No Laravel 13, middlewares e constraints são mesclados; prefixes e names são concatenados.\n" +
+				"A ordem do middleware continua importando, porque ela define o pipeline da requisição.\n" +
+				"Agrupar bem as rotas reduz repetição e deixa regras transversais explícitas em um único lugar.",
 			Language: "php",
 		},
 		{
-			ID:    "routes-resource",
-			Title: "Resource Routes",
-			Description: "Uma linha registra 7 rotas RESTful para operações CRUD.\n" +
-				"Segue as convenções REST do Laravel — verbos HTTP corretos para cada ação.",
+			ID:       "routes-resource",
+			Title:    "Resource Routes",
+			Audience: "shared",
+			Description: "Transforma um controller de recurso em um conjunto completo de rotas CRUD seguindo convenções REST.\n" +
+				"A documentação usa esse padrão como caminho principal para recursos tradicionais com index, show, create, store, edit, update e destroy.",
 			Code: `use App\Http\Controllers\PhotoController;
 
+// Web: CRUD completo com telas HTML
 // Registra 7 rotas de uma vez
 Route::resource('photos', PhotoController::class);
 
@@ -167,14 +179,17 @@ Route::resource('photos', PhotoController::class)
 Route::resource('photos', PhotoController::class)
     ->except(['create', 'edit']);
 
+// API: remove create e edit automaticamente
+Route::apiResource('photos', PhotoController::class);
+
 // Múltiplos resources
 Route::resources([
     'photos' => PhotoController::class,
     'posts'  => PostController::class,
 ]);`,
-			Explanation: "php artisan route:list mostra todas as rotas com nomes e middlewares.\n" +
-				"Para APIs use Route::apiResource() — exclui create e edit (sem forms HTML).\n" +
-				"O parâmetro gerado é o nome no singular: photos → {photo}.",
+			Explanation: "Além de gerar as 7 rotas, o Laravel também gera nomes e parâmetros coerentes automaticamente.\n" +
+				"only, except e apiResource permitem expor apenas o recorte necessário do recurso.\n" +
+				"Quando combinado com route model binding, esse padrão reduz bastante o boilerplate de CRUD.",
 			Language: "php",
 		},
 	},

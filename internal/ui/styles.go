@@ -32,6 +32,25 @@ var (
 			Underline(true).
 			MarginBottom(1)
 
+	badgeBaseStyle = lipgloss.NewStyle().
+			Bold(true).
+			Padding(0, 1)
+
+	badgeWebStyle = badgeBaseStyle.Copy().
+			Foreground(lipgloss.Color("#0B1F14")).
+			Background(lipgloss.Color("#6BCB77"))
+
+	badgeAPIStyle = badgeBaseStyle.Copy().
+			Foreground(lipgloss.Color("#0D1B2A")).
+			Background(lipgloss.Color("#4D96FF"))
+
+	badgeSharedStyle = badgeBaseStyle.Copy().
+				Foreground(lipgloss.Color("#2A1A00")).
+				Background(lipgloss.Color("#FFD93D"))
+
+	legendStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#666666"))
+
 	contentDesc = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")).
 			MarginBottom(1)
@@ -44,6 +63,17 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#444444")).
 			MarginTop(1)
+
+	scrollTrackStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#333333"))
+
+	scrollFillStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFD93D")).
+			Bold(true)
+
+	scrollStatusStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFD93D")).
+				Bold(true)
 
 	paneStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, true, false, false).

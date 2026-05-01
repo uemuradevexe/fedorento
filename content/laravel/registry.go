@@ -7,9 +7,12 @@ var Laravel13 = data.Chapter{
 	Title: "Laravel 13",
 	Sections: []data.Section{
 		RoutesSection,
+		MiddlewareSection,
 		ControllersSection,
-		ModelsSection,
+		RequestsSection,
+		ValidationSection,
 		MigrationsSection,
+		ModelsSection,
 		EloquentSection,
 	},
 }

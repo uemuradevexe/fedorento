@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/uemuradevexe/fedorento/content/laravel"
@@ -19,6 +20,8 @@ const (
 	screenNav
 	screenContent
 )
+
+const contentHelpText = "esc/q voltar • ↑/↓ ou j/k rolar • space/pgdn descer página • b/pgup subir página"
 
 // Model is the root Bubble Tea model.
 type Model struct {
@@ -40,6 +43,8 @@ type Model struct {
 	// terminal size
 	width  int
 	height int
+
+	content viewport.Model
 }
 
 func New() Model {
@@ -63,8 +68,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.syncContentViewport()
 
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+
 		switch m.screen {
 		case screenSplash:
 			if msg.String() == "enter" || msg.String() == " " {
@@ -77,12 +87,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenContent:
 			if msg.String() == "esc" || msg.String() == "q" {
 				m.screen = screenNav
+			} else {
+				var cmd tea.Cmd
+				m.content, cmd = m.content.Update(msg)
+				return m, cmd
 			}
-		}
-
-		// global quit
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
 		}
 	}
 	return m, nil
@@ -155,6 +164,7 @@ func (m Model) updateNav(msg tea.KeyMsg) Model {
 	case "enter", "l":
 		if m.navPane == 1 {
 			m.screen = screenContent
+			m.setContentViewport()
 		} else {
 			m.navPane = 1
 		}
@@ -162,6 +172,68 @@ func (m Model) updateNav(msg tea.KeyMsg) Model {
 		m.navPane = 0
 	}
 	return m
+}
+
+func (m *Model) syncContentViewport() {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+
+	helpHeight := lipgloss.Height(helpStyle.Render(contentHelpText))
+	contentHeight := m.height - helpHeight - 1
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	contentWidth := m.width - 4
+	if contentWidth < 20 {
+		contentWidth = m.width
+	}
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
+	m.content.Width = contentWidth
+	m.content.Height = contentHeight
+	if m.screen == screenContent {
+		m.setContentViewport()
+	}
+}
+
+func (m *Model) setContentViewport() {
+	chapter := m.chapters[m.chapterIdx]
+	section := chapter.Sections[m.sectionIdx]
+	topic := section.Topics[m.topicIdx]
+
+	lang := topic.Language
+	if lang == "" {
+		lang = "php"
+	}
+
+	if m.content.Width == 0 || m.content.Height == 0 {
+		m.syncContentViewport()
+		if m.content.Width == 0 {
+			m.content.Width = 80
+		}
+		if m.content.Height == 0 {
+			m.content.Height = 20
+		}
+	}
+
+	code := highlight.RenderCode(topic.Code, lang)
+	title := contentTitle.Render(topic.Title)
+	if badge := topicAudienceBadge(topic.Audience); badge != "" {
+		title = lipgloss.JoinHorizontal(lipgloss.Center, title, " ", badge)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(title + "\n")
+	sb.WriteString(contentDesc.Width(m.content.Width).Render(topic.Description) + "\n\n")
+	sb.WriteString(code + "\n")
+	sb.WriteString(contentExpl.Width(m.content.Width).Render(topic.Explanation) + "\n")
+
+	m.content.SetContent(sb.String())
+	m.content.GotoTop()
 }
 
 // --- View ---
@@ -215,10 +287,14 @@ func (m Model) viewNav() string {
 	section := chapter.Sections[m.sectionIdx]
 	right.WriteString(titleStyle.Render(section.Title) + "\n\n")
 	for i, topic := range section.Topics {
+		label := topic.Title
+		if short := topicAudienceShort(topic.Audience); short != "" {
+			label += " [" + short + "]"
+		}
 		if m.navPane == 1 && i == m.topicIdx {
-			right.WriteString(selectedDimItem.Render("▶ " + topic.Title))
+			right.WriteString(selectedDimItem.Render("▶ " + label))
 		} else {
-			right.WriteString(dimItem.Render("  " + topic.Title))
+			right.WriteString(dimItem.Render("  " + label))
 		}
 		right.WriteString("\n")
 	}
@@ -233,29 +309,68 @@ func (m Model) viewNav() string {
 	if m.navPane == 1 {
 		paneLabel = "tópicos"
 	}
+	legend := legendStyle.Render(
+		topicAudienceBadge("web") + " " +
+			topicAudienceBadge("api") + " " +
+			topicAudienceBadge("shared"),
+	)
 	help := helpStyle.Render(
 		fmt.Sprintf("tab trocar painel [%s] • ↑/↓ navegar • enter abrir • esc voltar", paneLabel),
 	)
-	return body + "\n" + help
+	footer := lipgloss.JoinHorizontal(lipgloss.Top, help, "  ", legend)
+	footer = lipgloss.NewStyle().Width(m.width).Render(footer)
+	return body + "\n" + footer
 }
 
 func (m Model) viewContent() string {
-	chapter := m.chapters[m.chapterIdx]
-	section := chapter.Sections[m.sectionIdx]
-	topic := section.Topics[m.topicIdx]
-
-	lang := topic.Language
-	if lang == "" {
-		lang = "php"
+	progress := m.content.ScrollPercent()
+	status := fmt.Sprintf("scroll %d%%", int(m.content.ScrollPercent()*100))
+	if m.content.AtTop() {
+		status = "topo"
+	}
+	if m.content.AtBottom() {
+		status = "fim"
 	}
 
-	code := highlight.RenderCode(topic.Code, lang)
+	help := helpStyle.Render(contentHelpText)
+	indicator := scrollStatusStyle.Render(status)
+	rightWidth := max(18, min(40, m.width/3))
+	barWidth := max(10, rightWidth-lipgloss.Width(indicator)-2)
+	filled := int(progress * float64(barWidth))
+	if m.content.AtBottom() {
+		filled = barWidth
+	}
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := scrollFillStyle.Render(strings.Repeat("█", filled)) + scrollTrackStyle.Render(strings.Repeat("░", barWidth-filled))
+	right := lipgloss.JoinHorizontal(lipgloss.Top, bar, "  ", indicator)
+	right = lipgloss.NewStyle().Width(rightWidth).Align(lipgloss.Right).Render(right)
+	leftWidth := max(1, m.width-rightWidth)
+	left := lipgloss.NewStyle().Width(leftWidth).Render(help)
+	footer := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
-	var sb strings.Builder
-	sb.WriteString(contentTitle.Render(topic.Title) + "\n")
-	sb.WriteString(contentDesc.Render(topic.Description) + "\n\n")
-	sb.WriteString(code + "\n")
-	sb.WriteString(contentExpl.Render(topic.Explanation) + "\n")
-	sb.WriteString(helpStyle.Render("\nesc/q voltar"))
-	return sb.String()
+	return m.content.View() + "\n" + footer
+}
+
+func topicAudienceShort(audience string) string {
+	switch audience {
+	case "web":
+		return "W"
+	case "api":
+		return "A"
+	default:
+		return "*"
+	}
+}
+
+func topicAudienceBadge(audience string) string {
+	switch audience {
+	case "web":
+		return badgeWebStyle.Render("W WEB")
+	case "api":
+		return badgeAPIStyle.Render("A API")
+	default:
+		return badgeSharedStyle.Render("* ALL")
+	}
 }
